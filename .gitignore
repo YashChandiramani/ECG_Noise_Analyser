@@ -1,0 +1,63 @@
+
+# =========================
+# Python cache files
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+
+# =========================
+# Python virtual environments
+# =========================
+venv/
+.venv/
+env/
+
+# =========================
+# Node.js dependencies
+# =========================
+node_modules/
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# IDE and editor files
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# Operating system files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Python build and test files
+# =========================
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+
+# Generated ML cache files
+ml/data/cwt_cache/
+*.pt

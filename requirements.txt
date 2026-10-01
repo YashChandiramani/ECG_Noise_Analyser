@@ -1,1 +1,10 @@
--r backend/requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+fastapi
+uvicorn[standard]
+python-multipart
+numpy
+pandas
+scipy
+PyWavelets
+torch
+torchvision

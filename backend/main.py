@@ -15,6 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from torchvision.models import resnet18
 
+# Keep CPU inference single-threaded to prevent memory/thread bloat on Render
+torch.set_num_threads(1)
+
 
 # ============================================================
 # PATHS
@@ -232,18 +235,30 @@ def load_resnet_model():
         2
     )
 
-    checkpoint = torch.load(
-        RESNET_MODEL_PATH,
-        map_location="cpu",
-        weights_only=False
-    )
+    try:
+        checkpoint = torch.load(
+            RESNET_MODEL_PATH,
+            map_location="cpu",
+            weights_only=False,
+            mmap=True
+        )
+    except Exception:
+        checkpoint = torch.load(
+            RESNET_MODEL_PATH,
+            map_location="cpu",
+            weights_only=False
+        )
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         state_dict = checkpoint["model_state_dict"]
     else:
         state_dict = checkpoint
 
-    model.load_state_dict(state_dict)
+    try:
+        model.load_state_dict(state_dict, assign=True)
+    except Exception:
+        model.load_state_dict(state_dict)
+
     model.eval()
 
     del checkpoint
@@ -575,7 +590,7 @@ async def predict(
             TARGET_SAMPLES
         )
 
-        with torch.no_grad():
+        with torch.inference_mode():
 
             logits = net(tensor)
 
@@ -589,6 +604,8 @@ async def predict(
                     probabilities
                 ).item()
             )
+
+        del tensor
 
         class_names = {
             0: "Clean",
@@ -651,52 +668,62 @@ async def predict(
     elif model == "resnet18":
 
         try:
-
             net = get_resnet_model()
-
         except FileNotFoundError as exc:
-
             raise HTTPException(
                 status_code=503,
                 detail=str(exc)
             )
-
+        except MemoryError:
+            raise HTTPException(
+                status_code=503,
+                detail="Server ran out of memory attempting to load ResNet-18. Please use the 1D CNN model."
+            )
         except Exception as exc:
-
             raise HTTPException(
                 status_code=500,
                 detail=f"Could not load ResNet-18: {exc}"
             )
 
-        # Same preprocessing as standalone
-        # predict_resnet.py
-        x = prepare_resnet_signal(
-            values
-        )
-
-        image = ecg_to_scalogram(
-            x
-        )
-
-        tensor = image.unsqueeze(
-            0
-        )
-
-        with torch.no_grad():
-
-            logits = net(
-                tensor
+        try:
+            # Same preprocessing as standalone
+            # predict_resnet.py
+            x = prepare_resnet_signal(
+                values
             )
 
-            probabilities = torch.softmax(
-                logits,
-                dim=1
-            )[0]
+            image = ecg_to_scalogram(
+                x
+            )
 
-            predicted_class = int(
-                torch.argmax(
-                    probabilities
-                ).item()
+            tensor = image.unsqueeze(
+                0
+            )
+
+            with torch.inference_mode():
+                logits = net(
+                    tensor
+                )
+
+                probabilities = torch.softmax(
+                    logits,
+                    dim=1
+                )[0]
+
+                predicted_class = int(
+                    torch.argmax(
+                        probabilities
+                    ).item()
+                )
+
+            del tensor, image, x
+            gc.collect()
+
+        except MemoryError:
+            gc.collect()
+            raise HTTPException(
+                status_code=503,
+                detail="Out of memory during CWT + ResNet-18 inference on this instance. Please use the lightweight 1D CNN model."
             )
 
         class_names = {

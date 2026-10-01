@@ -5,5 +5,3 @@ numpy
 pandas
 scipy
 PyWavelets
-torch
-torchvision

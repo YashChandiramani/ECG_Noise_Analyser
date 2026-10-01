@@ -208,13 +208,13 @@ function App() {
             <div className="model-list">
               <button className={`model-option ${model === "1d_cnn" ? "selected" : ""}`} onClick={() => setModel("1d_cnn")}>
                 <span className="model-symbol"><Waves size={19}/></span>
-                <span><strong>1D CNN</strong><small>Raw temporal ECG · fast inference</small></span>
+                <span><strong>1D CNN (Recommended)</strong><small>Raw temporal ECG · Fast & lightweight</small></span>
                 <span className="radio">{model === "1d_cnn" && <i/>}</span>
               </button>
 
               <button className={`model-option ${model === "resnet18" ? "selected" : ""}`} onClick={() => setModel("resnet18")}>
                 <span className="model-symbol"><Cpu size={19}/></span>
-                <span><strong>CWT + ResNet-18</strong><small>Time-frequency scalogram branch</small></span>
+                <span><strong>CWT + ResNet-18</strong><small>Scalogram image branch · Heavy</small></span>
                 <span className="radio">{model === "resnet18" && <i/>}</span>
               </button>
             </div>

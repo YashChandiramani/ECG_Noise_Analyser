@@ -86,19 +86,31 @@ function App() {
       });
 
       if (!response.ok) {
-        const detail = await response.text();
+        let detail = "Prediction request failed.";
+        try {
+          const errData = await response.json();
+          detail = errData.detail || errData.message || JSON.stringify(errData);
+        } catch {
+          detail = await response.text();
+        }
         throw new Error(detail || "Prediction request failed.");
       }
 
       setResult(await response.json());
     } catch (err) {
-  console.error(err);
+      console.error(err);
 
-  setError(
-    err.message ||
-    "Unable to analyze the ECG signal. Please make sure the FastAPI server is running."
-  );
-} finally {
+      if (err.name === "TypeError" && err.message?.includes("Failed to fetch")) {
+        setError(
+          "Unable to connect to the backend server. If using Render's free tier, the server spins down after inactivity and takes ~40-50 seconds to wake up on the first request. Please wait a moment and try again."
+        );
+      } else {
+        setError(
+          err.message ||
+          "Unable to analyze the ECG signal. Please make sure the FastAPI server is running."
+        );
+      }
+    } finally {
       setBusy(false);
     }
   };

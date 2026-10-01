@@ -4,7 +4,6 @@ python-multipart
 numpy
 pandas
 scipy
-opencv-python-headless
 PyWavelets
 torch
 torchvision

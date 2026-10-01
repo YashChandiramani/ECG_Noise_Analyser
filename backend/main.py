@@ -8,8 +8,11 @@ import torch
 import torch.nn as nn
 import scipy.signal as signal
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import gc
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from torchvision.models import resnet18
 
 
@@ -55,19 +58,39 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Exception handling middleware so 500 errors still pass through CORSMiddleware
+# with Access-Control-Allow-Origin headers attached, preventing browsers from
+# masking internal errors with CORS policy violations.
+@app.middleware("http")
+async def catch_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal server error: {str(exc)}"}
+        )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://ecg-noise-analyser.vercel.app",
-        "https://www.ecg-noise-analyser.vercel.app",
-    ],
-    allow_origin_regex=r"https://.*\\.vercel\\.app",
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "ECG Noise Analyzer API",
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health"
+    }
 
 
 # ============================================================
@@ -147,6 +170,10 @@ class Paper1DCNN(nn.Module):
 # LOAD 1D CNN
 # ============================================================
 
+_MODEL_1D = None
+_MODEL_RESNET = None
+
+
 def load_1d_model():
 
     if not CNN_MODEL_PATH.exists():
@@ -169,10 +196,19 @@ def load_1d_model():
         state = state["state_dict"]
 
     model.load_state_dict(state)
-
     model.eval()
 
+    del state
+    gc.collect()
+
     return model
+
+
+def get_1d_model():
+    global _MODEL_1D
+    if _MODEL_1D is None:
+        _MODEL_1D = load_1d_model()
+    return _MODEL_1D
 
 
 # ============================================================
@@ -203,13 +239,25 @@ def load_resnet_model():
     )
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        checkpoint = checkpoint["model_state_dict"]
+        state_dict = checkpoint["model_state_dict"]
+    else:
+        state_dict = checkpoint
 
-    model.load_state_dict(checkpoint)
-
+    model.load_state_dict(state_dict)
     model.eval()
 
+    del checkpoint
+    del state_dict
+    gc.collect()
+
     return model
+
+
+def get_resnet_model():
+    global _MODEL_RESNET
+    if _MODEL_RESNET is None:
+        _MODEL_RESNET = load_resnet_model()
+    return _MODEL_RESNET
 
 
 # ============================================================
@@ -499,7 +547,7 @@ async def predict(
 
         try:
 
-            net = load_1d_model()
+            net = get_1d_model()
 
         except FileNotFoundError as exc:
 
@@ -604,7 +652,7 @@ async def predict(
 
         try:
 
-            net = load_resnet_model()
+            net = get_resnet_model()
 
         except FileNotFoundError as exc:
 

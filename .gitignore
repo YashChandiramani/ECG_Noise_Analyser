@@ -60,4 +60,7 @@ htmlcov/
 
 # Generated ML cache files
 ml/data/cwt_cache/
-# *.pt
+
+# Keep trained model checkpoints tracked
+!ml/models/*.pt
+!backend/models/*.pt

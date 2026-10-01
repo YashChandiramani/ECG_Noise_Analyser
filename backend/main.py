@@ -18,12 +18,32 @@ from torchvision.models import resnet18
 # ============================================================
 
 BASE = Path(__file__).resolve().parent
-
-ML_DIR = BASE.parent / "ml"
+PROJECT_ROOT = BASE.parent
+ML_DIR = PROJECT_ROOT / "ml"
 MODEL_DIR = ML_DIR / "models"
+LEGACY_MODEL_DIR = BASE / "models"
 
-CNN_MODEL_PATH = MODEL_DIR / "paper_1d_cnn_noise.pt"
-RESNET_MODEL_PATH = MODEL_DIR / "resnet18_noise.pt"
+
+def resolve_model_path(filename: str) -> Path:
+    """Find a model anywhere the project may reasonably keep it."""
+
+    candidates = [
+        MODEL_DIR / filename,
+        LEGACY_MODEL_DIR / filename,
+        ML_DIR / filename,
+        PROJECT_ROOT / filename,
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    return candidates[0]
+
+
+CNN_MODEL_PATH = resolve_model_path("paper_1d_cnn_noise.pt")
+RESNET_MODEL_PATH = resolve_model_path("resnet18_noise.pt")
 
 
 # ============================================================
@@ -125,15 +145,22 @@ def load_1d_model():
 
     if not CNN_MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"1D CNN model not found: {CNN_MODEL_PATH}"
+            "1D CNN model not found. "
+            f"Expected one of: {MODEL_DIR / 'paper_1d_cnn_noise.pt'}, "
+            f"{LEGACY_MODEL_DIR / 'paper_1d_cnn_noise.pt'}, "
+            f"{ML_DIR / 'paper_1d_cnn_noise.pt'}"
         )
 
     model = Paper1DCNN(num_classes=2)
 
     state = torch.load(
         CNN_MODEL_PATH,
-        map_location="cpu"
+        map_location="cpu",
+        weights_only=False
     )
+
+    if isinstance(state, dict) and "state_dict" in state:
+        state = state["state_dict"]
 
     model.load_state_dict(state)
 
@@ -150,7 +177,10 @@ def load_resnet_model():
 
     if not RESNET_MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"ResNet-18 model not found: {RESNET_MODEL_PATH}"
+            "ResNet-18 model not found. "
+            f"Expected one of: {MODEL_DIR / 'resnet18_noise.pt'}, "
+            f"{LEGACY_MODEL_DIR / 'resnet18_noise.pt'}, "
+            f"{ML_DIR / 'resnet18_noise.pt'}"
         )
 
     model = resnet18(weights=None)
@@ -166,9 +196,10 @@ def load_resnet_model():
         weights_only=False
     )
 
-    model.load_state_dict(
-        checkpoint["model_state_dict"]
-    )
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        checkpoint = checkpoint["model_state_dict"]
+
+    model.load_state_dict(checkpoint)
 
     model.eval()
 
